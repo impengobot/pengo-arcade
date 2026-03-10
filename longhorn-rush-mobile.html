@@ -31,9 +31,8 @@
     <div class="help">Use the D-pad below (or swipe on the game). You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
     <div class="help" id="boards">
       <strong>Your High Score:</strong> <span id="yourBest">0</span>
-      &nbsp;|&nbsp;
-      <strong>Global High Score:</strong> <span id="globalBest">Loading...</span>
       &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
+      <div style="margin-top:6px"><strong>Global Top 10:</strong> <span id="globalTop">Loading...</span></div>
     </div>
 
     <div class="controls">
@@ -52,11 +51,11 @@
 <script>
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
-const yourBestEl=document.getElementById('yourBest'),globalBestEl=document.getElementById('globalBest');
+const yourBestEl=document.getElementById('yourBest'),globalTopEl=document.getElementById('globalTop');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
-const GLOBAL_URL='https://api.cl1p.net/pengo-arcade-global-top-score';
+const GLOBAL_URL='https://api.cl1p.net/pengo-arcade-global-top10';
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
 yourBestEl.textContent=String(highScore);
@@ -131,16 +130,30 @@ function sfxTouchdownOff(){beep(520,0.06,'sawtooth',0.02); setTimeout(()=>beep(3
 function sfxHit(){beep(140,0.12,'sawtooth',0.035);} 
 function sfxBoss(){beep(180,0.09,'square',0.03); setTimeout(()=>beep(150,0.09,'square',0.03),90);} 
 
+function normalizeBoard(data){
+  if(Array.isArray(data)) return data;
+  if(data && Array.isArray(data.scores)) return data.scores;
+  if(data && typeof data.score==='number') return [data];
+  return [];
+}
+
+function renderGlobalTop(list){
+  if(!list.length){ globalTopEl.textContent='No scores yet'; return; }
+  globalTopEl.textContent=list
+    .slice(0,10)
+    .map((s,i)=>`${i+1}) ${(s.name||'Player').slice(0,20)} ${s.score}`)
+    .join(' • ');
+}
+
 async function loadGlobalTop(){
   try{
     const r=await fetch(GLOBAL_URL,{cache:'no-store'});
     const txt=await r.text();
     const data=txt?JSON.parse(txt):null;
-    if(data && typeof data.score==='number'){
-      globalBestEl.textContent=`${data.name||'Player'} — ${data.score}`;
-    }else globalBestEl.textContent='No score yet';
+    const board=normalizeBoard(data).sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,10);
+    renderGlobalTop(board);
   }catch(e){
-    globalBestEl.textContent='Unavailable';
+    globalTopEl.textContent='Unavailable';
   }
 }
 
@@ -149,12 +162,11 @@ async function maybeSetGlobalTop(finalScore){
     const r=await fetch(GLOBAL_URL,{cache:'no-store'});
     const txt=await r.text();
     const data=txt?JSON.parse(txt):null;
-    const current=(data&&typeof data.score==='number')?data.score:0;
-    if(finalScore>current){
-      const payload={name:playerName||'Player',score:finalScore,updatedAt:new Date().toISOString()};
-      await fetch(GLOBAL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      globalBestEl.textContent=`${payload.name} — ${payload.score}`;
-    }
+    const board=normalizeBoard(data);
+    board.push({name:(playerName||'Player').slice(0,20),score:finalScore,updatedAt:new Date().toISOString()});
+    const next=board.sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,10);
+    await fetch(GLOBAL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)});
+    renderGlobalTop(next);
   }catch(e){/* noop */}
 }
 
