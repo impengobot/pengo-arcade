@@ -29,6 +29,12 @@
     <div class="hud"><span id="score">Score: 0</span><span id="speed">Speed: 1x</span><span id="state">Tap + dodge the stampede</span></div>
     <canvas id="game" width="860" height="500"></canvas>
     <div class="help">Use the D-pad below (or swipe on the game). You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
+    <div class="help" id="boards">
+      <strong>Your High Score:</strong> <span id="yourBest">0</span>
+      &nbsp;|&nbsp;
+      <strong>Global High Score:</strong> <span id="globalBest">Loading...</span>
+      &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
+    </div>
 
     <div class="controls">
       <div class="pad">
@@ -46,9 +52,14 @@
 <script>
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
+const yourBestEl=document.getElementById('yourBest'),globalBestEl=document.getElementById('globalBest');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
+const NAME_KEY='longhornRushPlayerName';
+const GLOBAL_URL='https://api.cl1p.net/pengo-arcade-global-top-score';
+let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
+yourBestEl.textContent=String(highScore);
 let boost=0,player,enemies,powerups,score,t,over,spawnTimer,touchdownFrames,bossTimer;
 const rand=(a,b)=>Math.random()*(b-a)+a;
 
@@ -120,6 +131,33 @@ function sfxTouchdownOff(){beep(520,0.06,'sawtooth',0.02); setTimeout(()=>beep(3
 function sfxHit(){beep(140,0.12,'sawtooth',0.035);} 
 function sfxBoss(){beep(180,0.09,'square',0.03); setTimeout(()=>beep(150,0.09,'square',0.03),90);} 
 
+async function loadGlobalTop(){
+  try{
+    const r=await fetch(GLOBAL_URL,{cache:'no-store'});
+    const txt=await r.text();
+    const data=txt?JSON.parse(txt):null;
+    if(data && typeof data.score==='number'){
+      globalBestEl.textContent=`${data.name||'Player'} — ${data.score}`;
+    }else globalBestEl.textContent='No score yet';
+  }catch(e){
+    globalBestEl.textContent='Unavailable';
+  }
+}
+
+async function maybeSetGlobalTop(finalScore){
+  try{
+    const r=await fetch(GLOBAL_URL,{cache:'no-store'});
+    const txt=await r.text();
+    const data=txt?JSON.parse(txt):null;
+    const current=(data&&typeof data.score==='number')?data.score:0;
+    if(finalScore>current){
+      const payload={name:playerName||'Player',score:finalScore,updatedAt:new Date().toISOString()};
+      await fetch(GLOBAL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      globalBestEl.textContent=`${payload.name} — ${payload.score}`;
+    }
+  }catch(e){/* noop */}
+}
+
 function musicTick(){
   if(!audioCtx) return;
 
@@ -177,6 +215,7 @@ function reset(){
   stateEl.textContent='Tap + dodge the stampede';
 }
 reset();
+loadGlobalTop();
 
 function bindHold(el,on,off){
   const start=e=>{e.preventDefault();on();el.classList.add('on')};
@@ -194,6 +233,10 @@ document.querySelectorAll('[data-k]').forEach(b=>{
 });
 bindHold(document.getElementById('boost'),()=>{ensureAudio();boost=1},()=>boost=0);
 document.getElementById('restart').addEventListener('click',()=>{ensureAudio(); reset();});
+document.getElementById('setName').addEventListener('click',()=>{
+  const v=prompt('Enter your player name:',playerName||'Player');
+  if(v&&v.trim()){playerName=v.trim().slice(0,20); localStorage.setItem(NAME_KEY,playerName); loadGlobalTop();}
+});
 
 let sx=0,sy=0;
 c.addEventListener('touchstart',e=>{ensureAudio();const t=e.touches[0];sx=t.clientX;sy=t.clientY},{passive:true});
@@ -218,10 +261,12 @@ function gameOver(){
   if(finalScore>highScore){
     highScore=finalScore;
     localStorage.setItem(HIGH_KEY,String(highScore));
+    yourBestEl.textContent=String(highScore);
     stateEl.textContent='NEW HIGH SCORE! 🤘 Tap Restart';
   }else{
     stateEl.textContent='Game Over — tap Restart';
   }
+  maybeSetGlobalTop(finalScore);
 }
 
 function step(){
