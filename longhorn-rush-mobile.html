@@ -55,7 +55,9 @@ const yourBestEl=document.getElementById('yourBest'),globalTopEl=document.getEle
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
-const GLOBAL_URL='https://api.cl1p.net/pengo-arcade-global-top10';
+const SUPABASE_URL='https://yhwhtrnisdtqztjngnsi.supabase.co';
+const SUPABASE_KEY='sb_publishable_s6m3S-X83BTMjdTfR_3slw_R9nGIRSR';
+const SUPABASE_SCORES_URL=`${SUPABASE_URL}/rest/v1/scores`;
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
 yourBestEl.textContent=String(highScore);
@@ -130,12 +132,11 @@ function sfxTouchdownOff(){beep(520,0.06,'sawtooth',0.02); setTimeout(()=>beep(3
 function sfxHit(){beep(140,0.12,'sawtooth',0.035);} 
 function sfxBoss(){beep(180,0.09,'square',0.03); setTimeout(()=>beep(150,0.09,'square',0.03),90);} 
 
-function normalizeBoard(data){
-  if(Array.isArray(data)) return data;
-  if(data && Array.isArray(data.scores)) return data.scores;
-  if(data && typeof data.score==='number') return [data];
-  return [];
-}
+const supabaseHeaders={
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type':'application/json'
+};
 
 function renderGlobalTop(list){
   if(!list.length){ globalTopEl.textContent='No scores yet'; return; }
@@ -147,11 +148,11 @@ function renderGlobalTop(list){
 
 async function loadGlobalTop(){
   try{
-    const r=await fetch(GLOBAL_URL,{cache:'no-store'});
-    const txt=await r.text();
-    const data=txt?JSON.parse(txt):null;
-    const board=normalizeBoard(data).sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,10);
-    renderGlobalTop(board);
+    const q='?select=name,score,created_at&order=score.desc,created_at.asc&limit=10';
+    const r=await fetch(`${SUPABASE_SCORES_URL}${q}`,{headers:supabaseHeaders,cache:'no-store'});
+    if(!r.ok) throw new Error(`supabase ${r.status}`);
+    const data=await r.json();
+    renderGlobalTop(Array.isArray(data)?data:[]);
   }catch(e){
     globalTopEl.textContent='Unavailable';
   }
@@ -159,14 +160,9 @@ async function loadGlobalTop(){
 
 async function maybeSetGlobalTop(finalScore){
   try{
-    const r=await fetch(GLOBAL_URL,{cache:'no-store'});
-    const txt=await r.text();
-    const data=txt?JSON.parse(txt):null;
-    const board=normalizeBoard(data);
-    board.push({name:(playerName||'Player').slice(0,20),score:finalScore,updatedAt:new Date().toISOString()});
-    const next=board.sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,10);
-    await fetch(GLOBAL_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)});
-    renderGlobalTop(next);
+    const payload={name:(playerName||'Player').slice(0,20),score:finalScore};
+    await fetch(SUPABASE_SCORES_URL,{method:'POST',headers:{...supabaseHeaders,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    await loadGlobalTop();
   }catch(e){/* noop */}
 }
 
