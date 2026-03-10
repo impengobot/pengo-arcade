@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Longhorn Rush</title>
+  <style>
+    :root {
+      --burnt-orange: #bf5700;
+      --deep-orange: #8f3f00;
+      --cream: #fff7eb;
+      --white: #ffffff;
+      --ink: #2c1403;
+      --gold: #ffd27a;
+      --shadow: rgba(44, 20, 3, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top, rgba(255, 210, 122, 0.55), transparent 30%),
+        linear-gradient(180deg, #ffd79d 0%, #ffb866 38%, #bf5700 100%);
+      overflow: hidden;
+    }
+
+    .frame {
+      width: min(96vw, 920px);
+      padding: 18px;
+      border-radius: 28px;
+      background: rgba(255, 247, 235, 0.94);
+      box-shadow: 0 20px 60px var(--shadow);
+      border: 4px solid rgba(255, 255, 255, 0.7);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.3rem);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--burnt-orange);
+      text-shadow: 2px 2px 0 var(--gold);
+    }
+
+    .title p {
+      margin: 4px 0 0;
+      font-size: 0.98rem;
+      max-width: 34rem;
+    }
+
+    .hud {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .card {
+      min-width: 132px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      background: var(--white);
+      border: 2px solid rgba(191, 87, 0, 0.18);
+      box-shadow: inset 0 -6px 0 rgba(191, 87, 0, 0.08);
+    }
+
+    .label {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(44, 20, 3, 0.7);
+    }
+
+    .value {
+      display: block;
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-top: 2px;
+    }
+
+    .arena {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, #6dc6ff 0%, #bde7ff 30%, #4eb264 31%, #3c8d4d 100%);
+      border: 4px solid var(--white);
+      box-shadow: inset 0 0 0 3px rgba(191, 87, 0, 0.18);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      text-align: center;
+      color: var(--white);
+      background: rgba(44, 20, 3, 0.38);
+      transition: opacity 180ms ease;
+      pointer-events: none;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+    }
+
+    .panel {
+      max-width: 28rem;
+      padding: 22px 24px;
+      border-radius: 22px;
+      background: rgba(191, 87, 0, 0.92);
+      border: 3px solid rgba(255, 255, 255, 0.78);
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.24);
+    }
+
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.7rem, 4vw, 2.5rem);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .panel p {
+      margin: 8px 0;
+      line-height: 1.45;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .instructions {
+      flex: 1 1 380px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 2px dashed rgba(191, 87, 0, 0.35);
+      line-height: 1.45;
+    }
+
+    .instructions strong {
+      color: var(--deep-orange);
+    }
+
+    .flair {
+      flex: 0 0 240px;
+      text-align: right;
+      font-weight: 700;
+      color: var(--deep-orange);
+      align-self: center;
+    }
+
+    @media (max-width: 760px) {
+      .flair {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="title">
+        <h1>Longhorn Rush</h1>
+        <p>Gallop through Austin traffic, scoop up rally flags, and dodge trouble before the stampede gets wild.</p>
+      </div>
+      <div class="hud">
+        <div class="card">
+          <span class="label">Score</span>
+          <span class="value" id="score">0</span>
+        </div>
+        <div class="card">
+          <span class="label">Best</span>
+          <span class="value" id="best">0</span>
+        </div>
+        <div class="card">
+          <span class="label">Speed</span>
+          <span class="value" id="level">1.0x</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arena">
+      <canvas id="game" width="860" height="520" aria-label="Longhorn Rush game canvas"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <h2 id="overlay-title">Kickoff Time</h2>
+          <p id="overlay-text">Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move. Grab rally flags for points, dodge rivals and barriers, and press <strong>Space</strong> to start.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="instructions">
+        <strong>How to play:</strong> Move the Longhorn around the field with <strong>WASD</strong> or <strong>Arrow Keys</strong>. Collect white rally flags for bonus points. Avoid crimson rivals and roadblocks. Survive longer to raise the game speed. On game over, press <strong>R</strong> to restart or <strong>Space</strong> to jump back in.
+      </div>
+      <div class="flair">Hook 'em and keep moving.</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const levelEl = document.getElementById("level");
+    const overlayEl = document.getElementById("overlay");
+    const overlayTitleEl = document.getElementById("overlay-title");
+    const overlayTextEl = document.getElementById("overlay-text");
+
+    const world = {
+      width: canvas.width,
+      height: canvas.height,
+      laneStripeOffset: 0,
+      started: false,
+      over: false,
+      lastTime: 0,
+      spawnTimer: 0,
+      pickupTimer: 0,
+      elapsed: 0,
+      score: 0,
+      best: Number(localStorage.getItem("longhorn-rush-best") || 0),
+      difficulty: 1,
+      player: null,
+      obstacles: [],
+      pickups: [],
+      particles: []
+    };
+
+    const input = {
+      up: false,
+      down: false,
+      left: false,
+      right: false
+    };
+
+    function resetGame() {
+      world.started = false;
+      world.over = false;
+      world.lastTime = 0;
+      world.spawnTimer = 0;
+      world.pickupTimer = 0;
+      world.elapsed = 0;
+      world.score = 0;
+      world.difficulty = 1;
+      world.obstacles = [];
+      world.pickups = [];
+      world.particles = [];
+      world.laneStripeOffset = 0;
+      world.player = {
+        x: 150,
+        y: world.height / 2,
+        radius: 28,
+        speed: 290,
+        blink: 0
+      };
+      updateHud();
+      showOverlay(
+        "Kickoff Time",
+        "Use WASD or Arrow Keys to move. Grab rally flags, dodge the bad stuff, and press Space to start."
+      );
+    }
+
+    function updateHud() {
+      scoreEl.textContent = Math.floor(world.score);
+      bestEl.textContent = Math.floor(world.best);
+      levelEl.textContent = world.difficulty.toFixed(1) + "x";
+    }
+
+    function showOverlay(title, text) {
+      overlayTitleEl.textContent = title;
+      overlayTextEl.textContent = text;
+      overlayEl.classList.remove("hidden");
+    }
+
+    function hideOverlay() {
+      overlayEl.classList.add("hidden");
+    }
+
+    function spawnObstacle() {
+      const size = 24 + Math.random() * 30;
+      const type = Math.random() < 0.55 ? "rival" : "barrier";
+      world.obstacles.push({
+        x: world.width + size + Math.random() * 80,
+        y: 60 + Math.random() * (world.height - 120),
+        radius: size,
+        speed: 230 + Math.random() * 110 + world.difficulty * 46,
+        drift: (Math.random() - 0.5) * 75,
+        angle: Math.random() * Math.PI * 2,
+        type
+      });
+    }
+
+    function spawnPickup() {
+      world.pickups.push({
+        x: world.width + 24,
+        y: 70 + Math.random() * (world.height - 140),
+        radius: 16,
+        speed: 190 + world.difficulty * 24,
+        bob: Math.random() * Math.PI * 2
+      });
+    }
+
+    function burst(x, y, color, count) {
+      for (let i = 0; i < count; i += 1) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.25;
+        const speed = 60 + Math.random() * 130;
+        world.particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.7 + Math.random() * 0.4,
+          size: 4 + Math.random() * 5,
+          color
+        });
+      }
+    }
+
+    function collide(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const limit = a.radius + b.radius;
+      return dx * dx + dy * dy <= limit * limit;
+    }
+
+    function endGame() {
+      world.over = true;
+      world.started = false;
+      world.best = Math.max(world.best, Math.floor(world.score));
+      localStorage.setItem("longhorn-rush-best", String(world.best));
+      updateHud();
+      burst(world.player.x, world.player.y, "#fff7eb", 18);
+      showOverlay(
+        "Game Over",
+        "Final score: " + Math.floor(world.score) + ". Press R to restart or Space to charge again."
+      );
+    }
+
+    function update(dt) {
+      if (!world.started || world.over) {
+        updateParticles(dt);
+        return;
+      }
+
+      world.elapsed += dt;
+      world.difficulty = 1 + world.elapsed / 18;
+      world.score += dt * (10 + world.difficulty * 2.2);
+      world.laneStripeOffset = (world.laneStripeOffset + dt * (220 + world.difficulty * 30)) % 80;
+
+      const moveX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      const moveY = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+      const length = Math.hypot(moveX, moveY) || 1;
+      world.player.x += (moveX / length) * world.player.speed * dt;
+      world.player.y += (moveY / length) * world.player.speed * dt;
+      world.player.x = Math.max(world.player.radius, Math.min(world.width - world.player.radius, world.player.x));
+      world.player.y = Math.max(world.player.radius, Math.min(world.height - world.player.radius, world.player.y));
+      world.player.blink += dt * 8;
+
+      world.spawnTimer -= dt;
+      world.pickupTimer -= dt;
+
+      if (world.spawnTimer <= 0) {
+        spawnObstacle();
+        world.spawnTimer = Math.max(0.34, 1.15 - world.difficulty * 0.08);
+      }
+
+      if (world.pickupTimer <= 0) {
+        spawnPickup();
+        world.pickupTimer = Math.max(1.3, 2.8 - world.difficulty * 0.06);
+      }
+
+      world.obstacles = world.obstacles.filter((item) => {
+        item.x -= item.speed * dt;
+        item.y += Math.sin(world.elapsed * 1.8 + item.angle) * item.drift * dt;
+        item.y = Math.max(item.radius, Math.min(world.height - item.radius, item.y));
+        if (collide(world.player, item)) {
+          endGame();
+        }
+        return item.x > -item.radius - 10;
+      });
+
+      world.pickups = world.pickups.filter((item) => {
+        item.x -= item.speed * dt;
+        item.bob += dt * 5;
+        item.y += Math.sin(item.bob) * 18 * dt;
+        if (collide(world.player, item)) {
+          world.score += 75;
+          burst(item.x, item.y, "#ffffff", 10);
+          return false;
+        }
+        return item.x > -item.radius - 10;
+      });
+
+      updateParticles(dt);
+      if (!world.over) {
+        world.best = Math.max(world.best, Math.floor(world.score));
+      }
+      updateHud();
+    }
+
+    function updateParticles(dt) {
+      world.particles = world.particles.filter((particle) => {
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.life -= dt;
+        particle.vx *= 0.98;
+        particle.vy *= 0.98;
+        return particle.life > 0;
+      });
+    }
+
+    function drawField() {
+      ctx.clearRect(0, 0, world.width, world.height);
+
+      ctx.fillStyle = "#7fd0ff";
+      ctx.fillRect(0, 0, world.width, world.height * 0.28);
+
+      ctx.fillStyle = "#40934f";
+      ctx.fillRect(0, world.height * 0.28, world.width, world.height * 0.72);
+
+      ctx.fillStyle = "rgba(255,255,255,0.24)";
+      for (let i = -1; i < 13; i += 1) {
+        const x = i * 80 - world.laneStripeOffset;
+        ctx.fillRect(x, world.height * 0.42, 44, 14);
+      }
+
+      ctx.strokeStyle = "rgba(255,255,255,0.72)";
+      ctx.lineWidth = 4;
+      for (let y = 108; y < world.height; y += 82) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(world.width, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      for (let i = 0; i < 7; i += 1) {
+        ctx.beginPath();
+        ctx.arc(120 + i * 120, 64 + (i % 2) * 8, 30 + (i % 3) * 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawPlayer() {
+      const p = world.player;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      ctx.fillStyle = "#bf5700";
+      ctx.beginPath();
+      ctx.ellipse(0, 4, 34, 24, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff7eb";
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 17, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#fff7eb";
+      ctx.lineWidth = 6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-10, -10);
+      ctx.quadraticCurveTo(-34, -34, -48, -8);
+      ctx.moveTo(8, -14);
+      ctx.quadraticCurveTo(34, -42, 50, -12);
+      ctx.stroke();
+
+      ctx.fillStyle = "#2c1403";
+      ctx.beginPath();
+      ctx.arc(16, -2, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      const blink = Math.sin(p.blink) > 0.92;
+      if (blink) {
+        ctx.strokeStyle = "#2c1403";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(12, -2);
+        ctx.lineTo(19, -2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawObstacle(item) {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      if (item.type === "rival") {
+        ctx.fillStyle = "#8d1d24";
+        ctx.beginPath();
+        ctx.arc(0, 0, item.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#f3d7d9";
+        ctx.fillRect(-item.radius * 0.55, -item.radius * 0.2, item.radius * 1.1, item.radius * 0.4);
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(-item.radius * 0.25, -item.radius * 0.1, 4, 0, Math.PI * 2);
+        ctx.arc(item.radius * 0.25, -item.radius * 0.1, 4, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = "#f3efe8";
+        ctx.fillRect(-item.radius, -item.radius, item.radius * 2, item.radius * 2);
+        ctx.strokeStyle = "#bf5700";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(-item.radius * 0.65, -item.radius * 0.65);
+        ctx.lineTo(item.radius * 0.65, item.radius * 0.65);
+        ctx.moveTo(item.radius * 0.65, -item.radius * 0.65);
+        ctx.lineTo(-item.radius * 0.65, item.radius * 0.65);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawPickup(item) {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(-10, 14);
+      ctx.lineTo(-10, -14);
+      ctx.lineTo(12, -6);
+      ctx.lineTo(-10, 2);
+      ctx.lineTo(12, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#bf5700";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-10, -16);
+      ctx.lineTo(-10, 16);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      for (const particle of world.particles) {
+        ctx.globalAlpha = Math.max(0, particle.life);
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function draw() {
+      drawField();
+      for (const pickup of world.pickups) {
+        drawPickup(pickup);
+      }
+      for (const obstacle of world.obstacles) {
+        drawObstacle(obstacle);
+      }
+      drawPlayer();
+      drawParticles();
+    }
+
+    function frame(time) {
+      if (!world.lastTime) {
+        world.lastTime = time;
+      }
+      const dt = Math.min(0.033, (time - world.lastTime) / 1000);
+      world.lastTime = time;
+      update(dt);
+      draw();
+      requestAnimationFrame(frame);
+    }
+
+    function setKeyState(code, isDown) {
+      if (code === "ArrowUp" || code === "KeyW") input.up = isDown;
+      if (code === "ArrowDown" || code === "KeyS") input.down = isDown;
+      if (code === "ArrowLeft" || code === "KeyA") input.left = isDown;
+      if (code === "ArrowRight" || code === "KeyD") input.right = isDown;
+    }
+
+    window.addEventListener("keydown", (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
+        event.preventDefault();
+      }
+
+      if (event.code === "Space" && !world.started) {
+        if (world.over) {
+          resetGame();
+        }
+        world.started = true;
+        world.over = false;
+        hideOverlay();
+      } else if (event.code === "KeyR") {
+        resetGame();
+      }
+
+      setKeyState(event.code, true);
+    });
+
+    window.addEventListener("keyup", (event) => {
+      setKeyState(event.code, false);
+    });
+
+    resetGame();
+    updateHud();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

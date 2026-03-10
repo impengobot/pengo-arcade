@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Longhorn Rush Mobile 🐂</title>
+  <style>
+    :root{--burnt:#bf5700;--cream:#fff7e6;--dark:#1d1d1f}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui;background:linear-gradient(180deg,var(--cream),#ffd9b3);color:var(--dark)}
+    .wrap{max-width:720px;margin:0 auto;padding:10px 10px calc(14px + env(safe-area-inset-bottom))}
+    h1{margin:4px 0 8px;color:var(--burnt);font-size:1.35rem}
+    .hud{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:.95rem;margin-bottom:8px;flex-wrap:wrap}
+    canvas{display:block;width:100%;height:auto;background:#2f2f33;border:3px solid var(--burnt);border-radius:12px;touch-action:none}
+    .help{margin:8px 0 10px;font-size:.9rem;opacity:.9}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
+    .pad{display:grid;grid-template-columns:64px 64px 64px;grid-template-rows:64px 64px 64px;gap:6px;justify-content:start}
+    .btn{border:none;border-radius:12px;font-size:1.2rem;font-weight:700;background:#fff;color:#222;box-shadow:0 3px 0 #c9c9c9;touch-action:none}
+    .btn:active,.btn.on{transform:translateY(2px);box-shadow:0 1px 0 #c9c9c9;background:#ffe6cc}
+    .actions{display:flex;justify-content:flex-end;gap:8px}
+    .pill{padding:0 14px;height:64px;min-width:92px;font-size:1rem}
+    .big{background:var(--burnt);color:#fff;box-shadow:0 3px 0 #8f4200}
+    .big:active{box-shadow:0 1px 0 #8f4200}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Longhorn Rush Mobile 🐂</h1>
+    <div class="hud"><span id="score">Score: 0</span><span id="speed">Speed: 1x</span><span id="state">Tap + dodge the stampede</span></div>
+    <canvas id="game" width="860" height="500"></canvas>
+    <div class="help">Use the D-pad below (or swipe on the game). You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
+
+    <div class="controls">
+      <div class="pad">
+        <div></div><button class="btn" data-k="up">▲</button><div></div>
+        <button class="btn" data-k="left">◀</button><div></div><button class="btn" data-k="right">▶</button>
+        <div></div><button class="btn" data-k="down">▼</button><div></div>
+      </div>
+      <div class="actions">
+        <button id="boost" class="btn pill">Boost</button>
+        <button id="restart" class="btn pill big">Restart</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const c=document.getElementById('game'),x=c.getContext('2d');
+const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
+const keys={up:0,down:0,left:0,right:0};
+const HIGH_KEY='longhornRushHighScore';
+let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
+let boost=0,player,enemies,powerups,score,t,over,spawnTimer,touchdownFrames,bossTimer;
+const rand=(a,b)=>Math.random()*(b-a)+a;
+
+// lightweight WebAudio SFX (no external files)
+let audioCtx=null, musicTimer=null, musicMode='normal', musicIntervalMs=170;
+let normalIdx=0, tdIdx=0, tdRemain=0;
+const normalSeq=[262,330,392,330,294,349,440,349,262,330,392,523,494,440,392,330];
+// Eyes phrase using requested contour, with longer held-note durations.
+const N={G3:196.00,D3:146.83,G4:392.00,C5:523.25,CS5:554.37,D5:587.33,E5:659.25};
+const tdSeq=[
+  // G-C-G-C-G-C-D-E
+  {n:N.G4,d:2,b:N.G3},{n:N.C5,d:2,b:N.G3},{n:N.G4,d:2,b:N.D3},{n:N.C5,d:2,b:N.G3},{n:N.G4,d:2,b:N.D3},{n:N.C5,d:2,b:N.G3},{n:N.D5,d:2,b:N.D3},{n:N.E5,d:4,b:N.G3},
+  // E-E-D-D-E-D
+  {n:N.E5,d:2,b:N.G3},{n:N.E5,d:2,b:N.G3},{n:N.D5,d:2,b:N.D3},{n:N.D5,d:2,b:N.D3},{n:N.E5,d:2,b:N.G3},{n:N.D5,d:4,b:N.D3},
+  // D-D-C#-D-E-D-C-G
+  {n:N.D5,d:2,b:N.D3},{n:N.D5,d:2,b:N.D3},{n:N.CS5,d:2,b:N.D3},{n:N.D5,d:2,b:N.D3},{n:N.E5,d:2,b:N.G3},{n:N.D5,d:2,b:N.D3},{n:N.C5,d:3,b:N.G3},{n:N.G4,d:6,b:N.G3},
+  {n:0,d:2,b:0}
+];
+
+function ensureAudio(){
+  if(!audioCtx){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC) audioCtx=new AC();
+  }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  if(audioCtx && !musicTimer) startMusic();
+}
+function beep(freq=440,dur=0.08,type='sine',vol=0.03){
+  if(!audioCtx || !freq) return;
+  const now=audioCtx.currentTime;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,now);
+  g.gain.setValueAtTime(vol,now);
+  g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(now); o.stop(now+dur);
+}
+function noiseHit(dur=0.04,vol=0.02){
+  if(!audioCtx) return;
+  const len=Math.max(1,Math.floor(audioCtx.sampleRate*dur));
+  const buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate);
+  const data=buf.getChannelData(0);
+  for(let i=0;i<len;i++) data[i]=(Math.random()*2-1)*(1-i/len);
+  const src=audioCtx.createBufferSource();
+  const g=audioCtx.createGain();
+  src.buffer=buf;
+  g.gain.value=vol;
+  src.connect(g); g.connect(audioCtx.destination);
+  src.start();
+}
+function sfxCollect(){beep(700,0.06,'triangle',0.025); setTimeout(()=>beep(920,0.08,'triangle',0.02),45);} 
+function sfxCrowdChant(){
+  // simple "TEX-AS! FIGHT!" crowd-ish chant texture
+  const chant=[
+    [220,0],[220,70],[262,140],   // TEX
+    [196,320],[220,390],          // AS
+    [294,600],[262,690],[220,780] // FIGHT
+  ];
+  chant.forEach(([f,t])=>setTimeout(()=>{beep(f,0.10,'square',0.018); noiseHit(0.03,0.01);},t));
+}
+function sfxTouchdownOn(){
+  beep(330,0.10,'square',0.03);
+  setTimeout(()=>beep(440,0.10,'square',0.03),80);
+  setTimeout(()=>beep(660,0.16,'square',0.03),160);
+  setTimeout(()=>sfxCrowdChant(),120);
+} 
+function sfxTouchdownOff(){beep(520,0.06,'sawtooth',0.02); setTimeout(()=>beep(380,0.09,'sawtooth',0.02),60);} 
+function sfxHit(){beep(140,0.12,'sawtooth',0.035);} 
+function sfxBoss(){beep(180,0.09,'square',0.03); setTimeout(()=>beep(150,0.09,'square',0.03),90);} 
+
+function musicTick(){
+  if(!audioCtx) return;
+
+  if(musicMode==='touchdown'){
+    if(tdRemain>0){ tdRemain--; return; } // hold current note; no pulsing retrigger
+    const ev=tdSeq[tdIdx];
+    tdIdx=(tdIdx+1)%tdSeq.length;
+    tdRemain=Math.max(0,ev.d-1);
+    if(ev.n>0){
+      const noteDur=(musicIntervalMs*ev.d*0.9)/1000; // true held durations
+      // full-band vibe: lead + harmony + bass
+      beep(ev.n,noteDur,'square',0.032);          // lead brass-ish line
+      beep(ev.n*1.25,noteDur*0.85,'sawtooth',0.012); // upper harmony color
+      if(ev.b>0) beep(ev.b,Math.max(0.09,noteDur*0.9),'triangle',0.028); // tuba-ish bass
+
+      // drumline cadence accents
+      noiseHit(0.028,0.012);                       // snare texture every note
+      if(ev.d>=3){                                 // long-note hits: add kick-ish thump
+        beep(82,0.06,'sine',0.018);
+        setTimeout(()=>noiseHit(0.03,0.014),70);
+      }
+    } else {
+      // rest still gets a light cadence tap
+      noiseHit(0.02,0.008);
+    }
+    return;
+  }
+
+  const note=normalSeq[normalIdx];
+  const accent=(normalIdx%4===0);
+  beep(note,accent?0.16:0.12,'square',0.014);
+  if(normalIdx%2===0) beep(note/2,0.10,'triangle',0.01);
+  normalIdx=(normalIdx+1)%normalSeq.length;
+}
+function startMusic(){
+  if(musicTimer) return;
+  normalIdx=0; tdIdx=0; tdRemain=0;
+  musicTimer=setInterval(musicTick,musicIntervalMs);
+}
+function setMusicMode(mode){
+  if(mode===musicMode) return;
+  musicMode=mode;
+  tdIdx=0; tdRemain=0; // restart phrase cleanly on mode switch
+  const next = mode==='touchdown' ? 105 : 170;
+  if(next!==musicIntervalMs){
+    musicIntervalMs=next;
+    if(musicTimer){ clearInterval(musicTimer); musicTimer=setInterval(musicTick,musicIntervalMs); }
+  }
+}
+
+function reset(){
+  player={x:90,y:250,r:16,s:4,color:'#bf5700'};enemies=[];powerups=[];
+  score=0;t=0;over=false;spawnTimer=0;boost=0;touchdownFrames=0;bossTimer=0;
+  setMusicMode('normal');
+  stateEl.textContent='Tap + dodge the stampede';
+}
+reset();
+
+function bindHold(el,on,off){
+  const start=e=>{e.preventDefault();on();el.classList.add('on')};
+  const end=e=>{e.preventDefault();off();el.classList.remove('on')};
+  el.addEventListener('touchstart',start,{passive:false});
+  el.addEventListener('touchend',end,{passive:false});
+  el.addEventListener('touchcancel',end,{passive:false});
+  el.addEventListener('mousedown',start);
+  el.addEventListener('mouseup',end);
+  el.addEventListener('mouseleave',end);
+}
+
+document.querySelectorAll('[data-k]').forEach(b=>{
+  const k=b.dataset.k; bindHold(b,()=>{ensureAudio();keys[k]=1},()=>keys[k]=0);
+});
+bindHold(document.getElementById('boost'),()=>{ensureAudio();boost=1},()=>boost=0);
+document.getElementById('restart').addEventListener('click',()=>{ensureAudio(); reset();});
+
+let sx=0,sy=0;
+c.addEventListener('touchstart',e=>{ensureAudio();const t=e.touches[0];sx=t.clientX;sy=t.clientY},{passive:true});
+c.addEventListener('touchmove',e=>{
+  const t=e.touches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+  keys.left=dx<-20; keys.right=dx>20; keys.up=dy<-20; keys.down=dy>20;
+},{passive:true});
+c.addEventListener('touchend',()=>{keys.up=keys.down=keys.left=keys.right=0;},{passive:true});
+
+function spawnEnemy(){enemies.push({x:c.width+30,y:rand(30,c.height-30),r:rand(12,22),vx:rand(2.8,5.8)+(t/1800),vy:rand(-.8,.8),boss:false});}
+function spawnBoss(){enemies.push({x:c.width+60,y:rand(70,c.height-70),r:34,vx:3.2+(t/2400),vy:rand(-1,1),boss:true});stateEl.textContent='BOSS DEFENDER INCOMING!'; sfxBoss();}
+function spawnFootball(){powerups.push({x:c.width+20,y:rand(30,c.height-30),r:10,vx:3+t/2600,kind:'football'});}
+function spawnTouchdown(){powerups.push({x:c.width+30,y:rand(40,c.height-40),r:13,vx:2.7+t/2800,kind:'touchdown'});}
+function hit(a,b){
+  const ar = a===player ? player.r * (touchdownFrames>0 ? 3 : 1) : a.r;
+  return Math.hypot(a.x-b.x,a.y-b.y)<ar+b.r;
+}
+
+function gameOver(){
+  over=true;
+  const finalScore=Math.floor(score);
+  if(finalScore>highScore){
+    highScore=finalScore;
+    localStorage.setItem(HIGH_KEY,String(highScore));
+    stateEl.textContent='NEW HIGH SCORE! 🤘 Tap Restart';
+  }else{
+    stateEl.textContent='Game Over — tap Restart';
+  }
+}
+
+function step(){
+  if(over)return;
+  t++; spawnTimer++; bossTimer++;
+  if(touchdownFrames>0)touchdownFrames--;
+
+  if(spawnTimer>Math.max(20,72-t/120)){
+    spawnEnemy();
+    if(Math.random()<.33)spawnFootball();
+    if(Math.random()<.08)spawnTouchdown();
+    spawnTimer=0;
+  }
+  if(bossTimer>=1800){ // ~30s at 60fps
+    spawnBoss();
+    bossTimer=0;
+  }
+
+  const speed=player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0);
+  if(keys.up)player.y-=speed; if(keys.down)player.y+=speed; if(keys.left)player.x-=speed; if(keys.right)player.x+=speed;
+  player.x=Math.max(player.r,Math.min(c.width-player.r,player.x));
+  player.y=Math.max(player.r,Math.min(c.height-player.r,player.y));
+
+  enemies.forEach(e=>{e.x-=e.vx;e.y+=e.vy;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
+  powerups.forEach(p=>p.x-=p.vx);
+  enemies=enemies.filter(e=>e.x>-100);
+  powerups=powerups.filter(p=>p.x>-60);
+
+  for(const e of enemies){
+    if(hit(player,e)){
+      if(touchdownFrames>0){
+        score += e.boss ? 350 : 120; // bonus points for trucking defenders in TD mode
+        sfxCollect();
+        e.x=-999;
+      }else{
+        sfxHit();
+        gameOver();
+        break;
+      }
+    }
+  }
+  enemies=enemies.filter(e=>e.x>-100);
+
+  powerups=powerups.filter(p=>{
+    if(hit(player,p)){
+      if(p.kind==='touchdown'){
+        const wasOff = touchdownFrames<=0;
+        touchdownFrames=420; // ~7s
+        score+=40;
+        stateEl.textContent='TOUCHDOWN MODE! INVINCIBLE 🏈';
+        if(wasOff){ sfxTouchdownOn(); setMusicMode('touchdown'); }
+      }else{
+        score+=25;
+        sfxCollect();
+      }
+      return false;
+    }
+    return true;
+  });
+
+  if(touchdownFrames===1){stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
+  if(!over)score += 0.12 + t/60000;
+}
+
+function drawField(){
+  x.fillStyle=touchdownFrames>0?'#3a2a18':'#2f2f33';
+  x.fillRect(0,0,c.width,c.height);
+  x.strokeStyle='#ffffff22';
+  for(let i=0;i<8;i++){x.beginPath();x.moveTo(0,i*70+((t*2)%70));x.lineTo(c.width,i*70+((t*2)%70));x.stroke();}
+}
+function drawPlayer(){
+  const px=player.x, py=player.y;
+  const baseSize = 42; // a little bigger by default
+  const size = touchdownFrames>0 ? baseSize*3 : baseSize; // 3x in touchdown mode
+  x.save();
+  x.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  x.textAlign='center';
+  x.textBaseline='middle';
+
+  // mirror so bull faces the other direction
+  x.translate(px, py+1);
+  x.scale(-1, 1);
+
+  if(touchdownFrames>0){
+    x.shadowColor='rgba(255,140,0,0.85)';
+    x.shadowBlur=22;
+  }
+  x.fillText('🐂', 0, 0);
+  x.restore();
+}
+function drawEnemy(e){
+  x.fillStyle='#d9d9d9';
+  x.beginPath();x.arc(e.x,e.y-e.r*0.35,e.r*0.45,0,Math.PI*2);x.fill();
+  const jerseyColor = touchdownFrames>0 ? '#7a0019' : (e.boss ? '#7a0019' : '#1f4aa8');
+  x.fillStyle=jerseyColor;
+  x.fillRect(e.x-e.r*0.5,e.y-e.r*0.15,e.r,e.r*0.95);
+  x.fillStyle='#fff';
+  x.fillRect(e.x-2,e.y,e.r*0.18,e.r*0.45);
+  x.fillStyle='#111';
+  x.fillRect(e.x-e.r*0.45,e.y+e.r*0.8,e.r*0.3,e.r*0.35);
+  x.fillRect(e.x+e.r*0.15,e.y+e.r*0.8,e.r*0.3,e.r*0.35);
+}
+function drawFootball(s){
+  x.save();
+  x.translate(s.x,s.y);
+  x.rotate(-0.35);
+  x.fillStyle='#8b4513';
+  x.beginPath();x.ellipse(0,0,s.r+3,s.r*0.62,0,0,Math.PI*2);x.fill();
+  x.strokeStyle='#f5e2c8';x.lineWidth=1.5;
+  x.beginPath();x.moveTo(-4,0);x.lineTo(4,0);x.stroke();
+  x.beginPath();x.moveTo(-1.5,-2.5);x.lineTo(-1.5,2.5);x.moveTo(0,-2.8);x.lineTo(0,2.8);x.moveTo(1.5,-2.5);x.lineTo(1.5,2.5);x.stroke();
+  x.restore();
+}
+function drawTouchdown(p){
+  x.fillStyle='#ffd54f';
+  x.beginPath();x.arc(p.x,p.y,p.r,0,Math.PI*2);x.fill();
+  x.fillStyle='#5b3500';
+  x.font='bold 12px system-ui';
+  x.fillText('TD',p.x-7,p.y+4);
+}
+
+function render(){
+  drawField();
+  powerups.forEach(p=>p.kind==='touchdown'?drawTouchdown(p):drawFootball(p));
+  enemies.forEach(drawEnemy);
+  drawPlayer();
+  scoreEl.textContent='Score: '+Math.floor(score)+' | Best: '+highScore;
+  speedEl.textContent='Speed: '+(1+t/1800).toFixed(2)+'x'+(touchdownFrames>0?' | TD MODE':'' );
+  if(over){
+    x.fillStyle='#000a';x.fillRect(0,0,c.width,c.height);
+    x.fillStyle='#fff';x.font='bold 44px system-ui';x.fillText('LONGHORN DOWN',260,220);
+    x.font='24px system-ui';x.fillText('Tap Restart',355,270);
+  }
+}
+
+(function loop(){step();render();requestAnimationFrame(loop);})();
+</script>
+</body>
+</html>
