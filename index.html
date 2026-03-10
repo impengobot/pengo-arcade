@@ -5,31 +5,56 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Pengo Arcade</title>
   <style>
-    body{font-family:system-ui;margin:0;background:#111;color:#f5f5f5}
-    .wrap{max-width:900px;margin:0 auto;padding:24px}
-    h1{margin:0 0 8px;color:#ff8c00}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
-    .card{background:#1b1b1b;border:1px solid #333;border-radius:12px;padding:14px}
-    a{color:#7ec8ff;text-decoration:none;font-weight:700}
-    p{opacity:.85}
+    :root{--bg:#0f1115;--card:#171a21;--line:#2b3240;--text:#eef3ff;--muted:#afbdd6;--burnt:#ff8c00;--link:#7ec8ff}
+    *{box-sizing:border-box}
+    body{font-family:system-ui;margin:0;background:radial-gradient(circle at top,#1a2230,var(--bg));color:var(--text)}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    h1{margin:0 0 6px;color:var(--burnt)}
+    p{color:var(--muted)}
+    .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    .badges{display:flex;gap:8px;flex-wrap:wrap}
+    .badges img{height:20px}
+    .cta{display:inline-block;background:var(--burnt);color:#1b1308;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:800}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+    .thumb{height:130px;border-radius:10px;display:grid;place-items:center;font-size:60px;background:linear-gradient(140deg,#252d3d,#1b1f2c);border:1px solid #323d52}
+    .thumb.mobile{background:linear-gradient(140deg,#3a2a18,#1f2230)}
+    h3{margin:0}
+    a.play{color:var(--link);text-decoration:none;font-weight:700}
+    .footer{margin-top:18px;font-size:.9rem;color:#8fa1c0}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>🐧 Pengo Arcade</h1>
-    <p>Fun browser games built live. Tap a game to play.</p>
+    <div class="top">
+      <div>
+        <h1>🐧 Pengo Arcade</h1>
+        <p>Fun browser games built live. Tap a game to play.</p>
+        <div class="badges">
+          <img alt="version" src="https://img.shields.io/badge/version-v0.1.0-ff8c00?style=flat"/>
+          <a href="https://github.com/impengobot/pengo-arcade/commits/main" target="_blank" rel="noopener"><img alt="changelog" src="https://img.shields.io/badge/changelog-latest%20commits-7ec8ff?style=flat"/></a>
+          <a href="https://github.com/impengobot/pengo-arcade" target="_blank" rel="noopener"><img alt="github" src="https://img.shields.io/badge/github-repo-8b9bb4?style=flat"/></a>
+        </div>
+      </div>
+      <a class="cta" href="https://github.com/impengobot/pengo-arcade/issues/new?title=Game%20Idea%3A%20&body=Describe%20your%20game%20idea%20here%20%F0%9F%8E%AE" target="_blank" rel="noopener">+ Submit New Game Idea</a>
+    </div>
+
     <div class="grid">
       <div class="card">
+        <div class="thumb">🤘</div>
         <h3>Longhorn Rush (Desktop)</h3>
-        <p>Keyboard arcade version.</p>
-        <a href="./longhorn-rush.html">Play now →</a>
+        <p>Keyboard arcade version with escalating chaos.</p>
+        <a class="play" href="./longhorn-rush.html">Play now →</a>
       </div>
       <div class="card">
+        <div class="thumb mobile">🐂</div>
         <h3>Longhorn Rush (Mobile)</h3>
         <p>Touch controls, touchdown mode, crowd chant, full-band vibes.</p>
-        <a href="./longhorn-rush-mobile.html">Play now →</a>
+        <a class="play" href="./longhorn-rush-mobile.html">Play now →</a>
       </div>
     </div>
+
+    <div class="footer">Tip: bookmark this page on your phone home screen for quick access.</div>
   </div>
 </body>
 </html>
