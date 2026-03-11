@@ -28,11 +28,12 @@
     <h1>Longhorn Rush Mobile 🐂</h1>
     <div class="hud"><span id="score">Score: 0</span><span id="speed">Speed: 1x</span><span id="state">Tap + dodge the stampede</span></div>
     <canvas id="game" width="860" height="500"></canvas>
-    <div class="help">Use the D-pad below (or swipe on the game). You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
+    <div class="help">Use WASD/Arrow keys on desktop, or D-pad/swipe on touch. You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
     <div class="help" id="boards">
       <strong>Your High Score:</strong> <span id="yourBest">0</span>
       &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
-      <div style="margin-top:6px"><strong>Global Top 10:</strong> <span id="globalTop">Loading...</span></div>
+      <div style="margin-top:6px"><strong>Mobile Top 10:</strong> <span id="globalTopMobile">Loading...</span></div>
+      <div style="margin-top:4px"><strong>Desktop Top 10:</strong> <span id="globalTopDesktop">Loading...</span></div>
     </div>
 
     <div class="controls">
@@ -51,13 +52,14 @@
 <script>
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
-const yourBestEl=document.getElementById('yourBest'),globalTopEl=document.getElementById('globalTop');
+const yourBestEl=document.getElementById('yourBest'),globalTopMobileEl=document.getElementById('globalTopMobile'),globalTopDesktopEl=document.getElementById('globalTopDesktop');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
 const SUPABASE_URL='https://yhwhtrnisdtqztjngnsi.supabase.co';
 const SUPABASE_KEY='sb_publishable_s6m3S-X83BTMjdTfR_3slw_R9nGIRSR';
 const SUPABASE_SCORES_URL=`${SUPABASE_URL}/rest/v1/scores`;
+const APP_MODE='mobile';
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
 yourBestEl.textContent=String(highScore);
@@ -138,29 +140,43 @@ const supabaseHeaders={
   'Content-Type':'application/json'
 };
 
-function renderGlobalTop(list){
-  if(!list.length){ globalTopEl.textContent='No scores yet'; return; }
-  globalTopEl.textContent=list
-    .slice(0,10)
-    .map((s,i)=>`${i+1}) ${(s.name||'Player').slice(0,20)} ${s.score}`)
-    .join(' • ');
+function boardLine(list){
+  if(!list.length) return 'No scores yet';
+  return list.slice(0,10).map((s,i)=>`${i+1}) ${s.name} ${s.score}`).join(' • ');
+}
+
+function normalizeTaggedScores(rows){
+  const mobile=[]; const desktop=[];
+  for(const r of (Array.isArray(rows)?rows:[])){
+    const raw=String(r.name||'Player');
+    const score=Number(r.score||0);
+    if(raw.startsWith('M|')) mobile.push({name:raw.slice(2),score});
+    else if(raw.startsWith('D|')) desktop.push({name:raw.slice(2),score});
+  }
+  mobile.sort((a,b)=>b.score-a.score);
+  desktop.sort((a,b)=>b.score-a.score);
+  return {mobile:mobile.slice(0,10),desktop:desktop.slice(0,10)};
 }
 
 async function loadGlobalTop(){
   try{
-    const q='?select=name,score,created_at&order=score.desc,created_at.asc&limit=10';
+    const q='?select=name,score,created_at&order=created_at.desc&limit=500';
     const r=await fetch(`${SUPABASE_SCORES_URL}${q}`,{headers:supabaseHeaders,cache:'no-store'});
     if(!r.ok) throw new Error(`supabase ${r.status}`);
     const data=await r.json();
-    renderGlobalTop(Array.isArray(data)?data:[]);
+    const split=normalizeTaggedScores(data);
+    globalTopMobileEl.textContent=boardLine(split.mobile);
+    globalTopDesktopEl.textContent=boardLine(split.desktop);
   }catch(e){
-    globalTopEl.textContent='Unavailable';
+    globalTopMobileEl.textContent='Unavailable';
+    globalTopDesktopEl.textContent='Unavailable';
   }
 }
 
 async function maybeSetGlobalTop(finalScore){
   try{
-    const payload={name:(playerName||'Player').slice(0,20),score:finalScore};
+    const tag = APP_MODE==='mobile' ? 'M|' : 'D|';
+    const payload={name:`${tag}${(playerName||'Player').slice(0,20)}`,score:finalScore};
     await fetch(SUPABASE_SCORES_URL,{method:'POST',headers:{...supabaseHeaders,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
     await loadGlobalTop();
   }catch(e){/* noop */}
@@ -247,6 +263,23 @@ document.getElementById('setName').addEventListener('click',()=>{
 });
 
 let sx=0,sy=0;
+addEventListener('keydown',e=>{
+  ensureAudio();
+  const k=e.key.toLowerCase();
+  if(k==='w'||k==='arrowup') keys.up=1;
+  if(k==='s'||k==='arrowdown') keys.down=1;
+  if(k==='a'||k==='arrowleft') keys.left=1;
+  if(k==='d'||k==='arrowright') keys.right=1;
+  if(k==='r') reset();
+});
+addEventListener('keyup',e=>{
+  const k=e.key.toLowerCase();
+  if(k==='w'||k==='arrowup') keys.up=0;
+  if(k==='s'||k==='arrowdown') keys.down=0;
+  if(k==='a'||k==='arrowleft') keys.left=0;
+  if(k==='d'||k==='arrowright') keys.right=0;
+});
+
 c.addEventListener('touchstart',e=>{ensureAudio();const t=e.touches[0];sx=t.clientX;sy=t.clientY},{passive:true});
 c.addEventListener('touchmove',e=>{
   const t=e.touches[0],dx=t.clientX-sx,dy=t.clientY-sy;

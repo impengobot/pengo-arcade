@@ -32,7 +32,8 @@
     <div class="help" id="boards">
       <strong>Your High Score:</strong> <span id="yourBest">0</span>
       &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
-      <div style="margin-top:6px"><strong>Global Top 10:</strong> <span id="globalTop">Loading...</span></div>
+      <div style="margin-top:6px"><strong>Mobile Top 10:</strong> <span id="globalTopMobile">Loading...</span></div>
+      <div style="margin-top:4px"><strong>Desktop Top 10:</strong> <span id="globalTopDesktop">Loading...</span></div>
     </div>
 
     <div class="controls">
@@ -51,13 +52,14 @@
 <script>
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
-const yourBestEl=document.getElementById('yourBest'),globalTopEl=document.getElementById('globalTop');
+const yourBestEl=document.getElementById('yourBest'),globalTopMobileEl=document.getElementById('globalTopMobile'),globalTopDesktopEl=document.getElementById('globalTopDesktop');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
 const SUPABASE_URL='https://yhwhtrnisdtqztjngnsi.supabase.co';
 const SUPABASE_KEY='sb_publishable_s6m3S-X83BTMjdTfR_3slw_R9nGIRSR';
 const SUPABASE_SCORES_URL=`${SUPABASE_URL}/rest/v1/scores`;
+const APP_MODE='desktop';
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
 yourBestEl.textContent=String(highScore);
@@ -138,29 +140,43 @@ const supabaseHeaders={
   'Content-Type':'application/json'
 };
 
-function renderGlobalTop(list){
-  if(!list.length){ globalTopEl.textContent='No scores yet'; return; }
-  globalTopEl.textContent=list
-    .slice(0,10)
-    .map((s,i)=>`${i+1}) ${(s.name||'Player').slice(0,20)} ${s.score}`)
-    .join(' • ');
+function boardLine(list){
+  if(!list.length) return 'No scores yet';
+  return list.slice(0,10).map((s,i)=>`${i+1}) ${s.name} ${s.score}`).join(' • ');
+}
+
+function normalizeTaggedScores(rows){
+  const mobile=[]; const desktop=[];
+  for(const r of (Array.isArray(rows)?rows:[])){
+    const raw=String(r.name||'Player');
+    const score=Number(r.score||0);
+    if(raw.startsWith('M|')) mobile.push({name:raw.slice(2),score});
+    else if(raw.startsWith('D|')) desktop.push({name:raw.slice(2),score});
+  }
+  mobile.sort((a,b)=>b.score-a.score);
+  desktop.sort((a,b)=>b.score-a.score);
+  return {mobile:mobile.slice(0,10),desktop:desktop.slice(0,10)};
 }
 
 async function loadGlobalTop(){
   try{
-    const q='?select=name,score,created_at&order=score.desc,created_at.asc&limit=10';
+    const q='?select=name,score,created_at&order=created_at.desc&limit=500';
     const r=await fetch(`${SUPABASE_SCORES_URL}${q}`,{headers:supabaseHeaders,cache:'no-store'});
     if(!r.ok) throw new Error(`supabase ${r.status}`);
     const data=await r.json();
-    renderGlobalTop(Array.isArray(data)?data:[]);
+    const split=normalizeTaggedScores(data);
+    globalTopMobileEl.textContent=boardLine(split.mobile);
+    globalTopDesktopEl.textContent=boardLine(split.desktop);
   }catch(e){
-    globalTopEl.textContent='Unavailable';
+    globalTopMobileEl.textContent='Unavailable';
+    globalTopDesktopEl.textContent='Unavailable';
   }
 }
 
 async function maybeSetGlobalTop(finalScore){
   try{
-    const payload={name:(playerName||'Player').slice(0,20),score:finalScore};
+    const tag = APP_MODE==='mobile' ? 'M|' : 'D|';
+    const payload={name:`${tag}${(playerName||'Player').slice(0,20)}`,score:finalScore};
     await fetch(SUPABASE_SCORES_URL,{method:'POST',headers:{...supabaseHeaders,'Prefer':'return=minimal'},body:JSON.stringify(payload)});
     await loadGlobalTop();
   }catch(e){/* noop */}
@@ -217,7 +233,7 @@ function setMusicMode(mode){
 }
 
 function reset(){
-  player={x:90,y:250,r:16,s:3.5,color:'#bf5700'};enemies=[];powerups=[];
+  player={x:90,y:250,r:16,s:4,color:'#bf5700'};enemies=[];powerups=[];
   score=0;t=0;over=false;spawnTimer=0;boost=0;touchdownFrames=0;bossTimer=0;
   setMusicMode('normal');
   stateEl.textContent='Tap + dodge the stampede';
@@ -271,10 +287,10 @@ c.addEventListener('touchmove',e=>{
 },{passive:true});
 c.addEventListener('touchend',()=>{keys.up=keys.down=keys.left=keys.right=0;},{passive:true});
 
-function spawnEnemy(){enemies.push({x:c.width+30,y:rand(30,c.height-30),r:rand(12,22),vx:rand(1.8,3.8)+(t/2600),vy:rand(-.8,.8),boss:false});}
-function spawnBoss(){enemies.push({x:c.width+60,y:rand(70,c.height-70),r:34,vx:2.8+(t/3000),vy:rand(-1,1),boss:true});stateEl.textContent='BOSS DEFENDER INCOMING!'; sfxBoss();}
-function spawnFootball(){powerups.push({x:c.width+20,y:rand(30,c.height-30),r:10,vx:2.2+t/3600,kind:'football'});}
-function spawnTouchdown(){powerups.push({x:c.width+30,y:rand(40,c.height-40),r:13,vx:2.0+t/3800,kind:'touchdown'});}
+function spawnEnemy(){enemies.push({x:c.width+30,y:rand(30,c.height-30),r:rand(12,22),vx:rand(2.8,5.8)+(t/1800),vy:rand(-.8,.8),boss:false});}
+function spawnBoss(){enemies.push({x:c.width+60,y:rand(70,c.height-70),r:34,vx:3.2+(t/2400),vy:rand(-1,1),boss:true});stateEl.textContent='BOSS DEFENDER INCOMING!'; sfxBoss();}
+function spawnFootball(){powerups.push({x:c.width+20,y:rand(30,c.height-30),r:10,vx:3+t/2600,kind:'football'});}
+function spawnTouchdown(){powerups.push({x:c.width+30,y:rand(40,c.height-40),r:13,vx:2.7+t/2800,kind:'touchdown'});}
 function hit(a,b){
   const ar = a===player ? player.r * (touchdownFrames>0 ? 3 : 1) : a.r;
   return Math.hypot(a.x-b.x,a.y-b.y)<ar+b.r;
@@ -294,13 +310,12 @@ function gameOver(){
   maybeSetGlobalTop(finalScore);
 }
 
-function step(dt=1){
+function step(){
   if(over)return;
-  const wasTd = touchdownFrames>0;
-  t+=dt; spawnTimer+=dt; bossTimer+=dt;
-  if(touchdownFrames>0)touchdownFrames-=dt;
+  t++; spawnTimer++; bossTimer++;
+  if(touchdownFrames>0)touchdownFrames--;
 
-  if(spawnTimer>Math.max(28,90-t/180)){
+  if(spawnTimer>Math.max(20,72-t/120)){
     spawnEnemy();
     if(Math.random()<.33)spawnFootball();
     if(Math.random()<.08)spawnTouchdown();
@@ -311,13 +326,13 @@ function step(dt=1){
     bossTimer=0;
   }
 
-  const speed=(player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0)) * dt;
+  const speed=player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0);
   if(keys.up)player.y-=speed; if(keys.down)player.y+=speed; if(keys.left)player.x-=speed; if(keys.right)player.x+=speed;
   player.x=Math.max(player.r,Math.min(c.width-player.r,player.x));
   player.y=Math.max(player.r,Math.min(c.height-player.r,player.y));
 
-  enemies.forEach(e=>{e.x-=e.vx*dt;e.y+=e.vy*dt;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
-  powerups.forEach(p=>p.x-=p.vx*dt);
+  enemies.forEach(e=>{e.x-=e.vx;e.y+=e.vy;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
+  powerups.forEach(p=>p.x-=p.vx);
   enemies=enemies.filter(e=>e.x>-100);
   powerups=powerups.filter(p=>p.x>-60);
 
@@ -353,8 +368,8 @@ function step(dt=1){
     return true;
   });
 
-  if(wasTd && touchdownFrames<=0){touchdownFrames=0; stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
-  if(!over)score += (0.12 + t/60000) * dt;
+  if(touchdownFrames===1){stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
+  if(!over)score += 0.12 + t/60000;
 }
 
 function drawField(){
@@ -428,15 +443,7 @@ function render(){
   }
 }
 
-let lastTs=performance.now();
-(function loop(ts){
-  const dtRaw=(ts-lastTs)/(1000/60);
-  const dt=Math.max(0.6,Math.min(1.8,dtRaw||1)); // normalize across 60/120/144Hz
-  lastTs=ts;
-  step(dt);
-  render();
-  requestAnimationFrame(loop);
-})(lastTs);
+(function loop(){step();render();requestAnimationFrame(loop);})();
 </script>
 </body>
 </html>
