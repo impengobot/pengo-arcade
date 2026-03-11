@@ -34,6 +34,7 @@
       &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
       <div style="margin-top:6px"><strong>Mobile Top 10:</strong> <span id="globalTopMobile">Loading...</span></div>
       <div style="margin-top:4px"><strong>Desktop Top 10:</strong> <span id="globalTopDesktop">Loading...</span></div>
+      <div style="margin-top:6px"><strong>Mobile Speed:</strong> <input id="speedSlider" type="range" min="0.7" max="1.3" step="0.05" value="1" style="vertical-align:middle;width:160px"> <span id="speedSliderVal">1.00x</span></div>
     </div>
 
     <div class="controls">
@@ -53,15 +54,18 @@
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
 const yourBestEl=document.getElementById('yourBest'),globalTopMobileEl=document.getElementById('globalTopMobile'),globalTopDesktopEl=document.getElementById('globalTopDesktop');
+const speedSlider=document.getElementById('speedSlider'),speedSliderVal=document.getElementById('speedSliderVal');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
+const SPEED_KEY='longhornRushMobileSpeedScale';
 const SUPABASE_URL='https://yhwhtrnisdtqztjngnsi.supabase.co';
 const SUPABASE_KEY='sb_publishable_s6m3S-X83BTMjdTfR_3slw_R9nGIRSR';
 const SUPABASE_SCORES_URL=`${SUPABASE_URL}/rest/v1/scores`;
 const APP_MODE='mobile';
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
+let gameSpeedScale=Number(localStorage.getItem(SPEED_KEY)||1);
 yourBestEl.textContent=String(highScore);
 let boost=0,player,enemies,powerups,score,t,over,spawnTimer,touchdownFrames,bossTimer;
 const rand=(a,b)=>Math.random()*(b-a)+a;
@@ -240,6 +244,15 @@ function reset(){
 }
 reset();
 loadGlobalTop();
+if(speedSlider){
+  speedSlider.value=String(gameSpeedScale);
+  speedSliderVal.textContent=`${gameSpeedScale.toFixed(2)}x`;
+  speedSlider.addEventListener('input',()=>{
+    gameSpeedScale=Number(speedSlider.value||1);
+    speedSliderVal.textContent=`${gameSpeedScale.toFixed(2)}x`;
+    localStorage.setItem(SPEED_KEY,String(gameSpeedScale));
+  });
+}
 
 function bindHold(el,on,off){
   const start=e=>{e.preventDefault();on();el.classList.add('on')};
@@ -312,8 +325,10 @@ function gameOver(){
 
 function step(){
   if(over)return;
-  t++; spawnTimer++; bossTimer++;
-  if(touchdownFrames>0)touchdownFrames--;
+  const gs=gameSpeedScale;
+  const wasTd = touchdownFrames>0;
+  t+=gs; spawnTimer+=gs; bossTimer+=gs;
+  if(touchdownFrames>0)touchdownFrames-=gs;
 
   if(spawnTimer>Math.max(20,72-t/120)){
     spawnEnemy();
@@ -326,13 +341,13 @@ function step(){
     bossTimer=0;
   }
 
-  const speed=player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0);
+  const speed=(player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0)) * gs;
   if(keys.up)player.y-=speed; if(keys.down)player.y+=speed; if(keys.left)player.x-=speed; if(keys.right)player.x+=speed;
   player.x=Math.max(player.r,Math.min(c.width-player.r,player.x));
   player.y=Math.max(player.r,Math.min(c.height-player.r,player.y));
 
-  enemies.forEach(e=>{e.x-=e.vx;e.y+=e.vy;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
-  powerups.forEach(p=>p.x-=p.vx);
+  enemies.forEach(e=>{e.x-=e.vx*gs;e.y+=e.vy*gs;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
+  powerups.forEach(p=>p.x-=p.vx*gs);
   enemies=enemies.filter(e=>e.x>-100);
   powerups=powerups.filter(p=>p.x>-60);
 
@@ -368,8 +383,8 @@ function step(){
     return true;
   });
 
-  if(touchdownFrames===1){stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
-  if(!over)score += 0.12 + t/60000;
+  if(wasTd && touchdownFrames<=0){touchdownFrames=0; stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
+  if(!over)score += (0.12 + t/60000) * gs;
 }
 
 function drawField(){
