@@ -28,12 +28,13 @@
     <h1>Longhorn Rush Desktop 🐂</h1>
     <div class="hud"><span id="score">Score: 0</span><span id="speed">Speed: 1x</span><span id="state">Tap + dodge the stampede</span></div>
     <canvas id="game" width="860" height="500"></canvas>
-    <div class="help">Use WASD/Arrow keys on desktop, or D-pad/swipe on touch. You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
+    <div class="help">Desktop controls: <strong>WASD</strong> to move, hold <strong>Space</strong> to boost. You are a tiny Longhorn 🐂, dodge football players, collect footballs 🏈, and trigger Touchdown Mode (all jerseys turn maroon 😈). Press Restart after game over.</div>
     <div class="help" id="boards">
       <strong>Your High Score:</strong> <span id="yourBest">0</span>
       &nbsp; <button id="setName" class="btn" style="height:32px;min-width:88px;font-size:.8rem;vertical-align:middle">Set Name</button>
       <div style="margin-top:6px"><strong>Mobile Top 10:</strong> <span id="globalTopMobile">Loading...</span></div>
       <div style="margin-top:4px"><strong>Desktop Top 10:</strong> <span id="globalTopDesktop">Loading...</span></div>
+      <div style="margin-top:6px"><strong>Desktop Speed:</strong> <input id="speedSlider" type="range" min="0.7" max="1.3" step="0.05" value="1" style="vertical-align:middle;width:160px"> <span id="speedSliderVal">1.00x</span></div>
     </div>
 
     <div class="controls">
@@ -53,15 +54,18 @@
 const c=document.getElementById('game'),x=c.getContext('2d');
 const scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),stateEl=document.getElementById('state');
 const yourBestEl=document.getElementById('yourBest'),globalTopMobileEl=document.getElementById('globalTopMobile'),globalTopDesktopEl=document.getElementById('globalTopDesktop');
+const speedSlider=document.getElementById('speedSlider'),speedSliderVal=document.getElementById('speedSliderVal');
 const keys={up:0,down:0,left:0,right:0};
 const HIGH_KEY='longhornRushHighScore';
 const NAME_KEY='longhornRushPlayerName';
+const SPEED_KEY='longhornRushDesktopSpeedScale';
 const SUPABASE_URL='https://yhwhtrnisdtqztjngnsi.supabase.co';
 const SUPABASE_KEY='sb_publishable_s6m3S-X83BTMjdTfR_3slw_R9nGIRSR';
 const SUPABASE_SCORES_URL=`${SUPABASE_URL}/rest/v1/scores`;
 const APP_MODE='desktop';
 let playerName=localStorage.getItem(NAME_KEY)||'Player';
 let highScore=Number(localStorage.getItem(HIGH_KEY)||0);
+let gameSpeedScale=Number(localStorage.getItem(SPEED_KEY)||1);
 yourBestEl.textContent=String(highScore);
 let boost=0,player,enemies,powerups,score,t,over,spawnTimer,touchdownFrames,bossTimer;
 const rand=(a,b)=>Math.random()*(b-a)+a;
@@ -240,6 +244,15 @@ function reset(){
 }
 reset();
 loadGlobalTop();
+if(speedSlider){
+  speedSlider.value=String(gameSpeedScale);
+  speedSliderVal.textContent=`${gameSpeedScale.toFixed(2)}x`;
+  speedSlider.addEventListener('input',()=>{
+    gameSpeedScale=Number(speedSlider.value||1);
+    speedSliderVal.textContent=`${gameSpeedScale.toFixed(2)}x`;
+    localStorage.setItem(SPEED_KEY,String(gameSpeedScale));
+  });
+}
 
 function bindHold(el,on,off){
   const start=e=>{e.preventDefault();on();el.classList.add('on')};
@@ -266,18 +279,19 @@ let sx=0,sy=0;
 addEventListener('keydown',e=>{
   ensureAudio();
   const k=e.key.toLowerCase();
-  if(k==='w'||k==='arrowup') keys.up=1;
-  if(k==='s'||k==='arrowdown') keys.down=1;
-  if(k==='a'||k==='arrowleft') keys.left=1;
-  if(k==='d'||k==='arrowright') keys.right=1;
-  if(k==='r') reset();
+  if(k==='w') keys.up=1;
+  if(k==='s') keys.down=1;
+  if(k==='a') keys.left=1;
+  if(k==='d') keys.right=1;
+  if(k===' ') { boost=1; e.preventDefault(); }
 });
 addEventListener('keyup',e=>{
   const k=e.key.toLowerCase();
-  if(k==='w'||k==='arrowup') keys.up=0;
-  if(k==='s'||k==='arrowdown') keys.down=0;
-  if(k==='a'||k==='arrowleft') keys.left=0;
-  if(k==='d'||k==='arrowright') keys.right=0;
+  if(k==='w') keys.up=0;
+  if(k==='s') keys.down=0;
+  if(k==='a') keys.left=0;
+  if(k==='d') keys.right=0;
+  if(k===' ') boost=0;
 });
 
 c.addEventListener('touchstart',e=>{ensureAudio();const t=e.touches[0];sx=t.clientX;sy=t.clientY},{passive:true});
@@ -447,7 +461,7 @@ function render(){
 let lastTs=performance.now();
 (function loop(ts){
   const dtRaw=(ts-lastTs)/(1000/60);
-  const dt=Math.max(0.6,Math.min(1.8,dtRaw||1));
+  const dt=Math.max(0.6,Math.min(1.8,dtRaw||1)) * gameSpeedScale;
   lastTs=ts;
   step(dt);
   render();
