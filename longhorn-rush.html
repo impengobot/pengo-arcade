@@ -217,7 +217,7 @@ function setMusicMode(mode){
 }
 
 function reset(){
-  player={x:90,y:250,r:16,s:4,color:'#bf5700'};enemies=[];powerups=[];
+  player={x:90,y:250,r:16,s:3.5,color:'#bf5700'};enemies=[];powerups=[];
   score=0;t=0;over=false;spawnTimer=0;boost=0;touchdownFrames=0;bossTimer=0;
   setMusicMode('normal');
   stateEl.textContent='Tap + dodge the stampede';
@@ -271,10 +271,10 @@ c.addEventListener('touchmove',e=>{
 },{passive:true});
 c.addEventListener('touchend',()=>{keys.up=keys.down=keys.left=keys.right=0;},{passive:true});
 
-function spawnEnemy(){enemies.push({x:c.width+30,y:rand(30,c.height-30),r:rand(12,22),vx:rand(2.8,5.8)+(t/1800),vy:rand(-.8,.8),boss:false});}
-function spawnBoss(){enemies.push({x:c.width+60,y:rand(70,c.height-70),r:34,vx:3.2+(t/2400),vy:rand(-1,1),boss:true});stateEl.textContent='BOSS DEFENDER INCOMING!'; sfxBoss();}
-function spawnFootball(){powerups.push({x:c.width+20,y:rand(30,c.height-30),r:10,vx:3+t/2600,kind:'football'});}
-function spawnTouchdown(){powerups.push({x:c.width+30,y:rand(40,c.height-40),r:13,vx:2.7+t/2800,kind:'touchdown'});}
+function spawnEnemy(){enemies.push({x:c.width+30,y:rand(30,c.height-30),r:rand(12,22),vx:rand(1.8,3.8)+(t/2600),vy:rand(-.8,.8),boss:false});}
+function spawnBoss(){enemies.push({x:c.width+60,y:rand(70,c.height-70),r:34,vx:2.8+(t/3000),vy:rand(-1,1),boss:true});stateEl.textContent='BOSS DEFENDER INCOMING!'; sfxBoss();}
+function spawnFootball(){powerups.push({x:c.width+20,y:rand(30,c.height-30),r:10,vx:2.2+t/3600,kind:'football'});}
+function spawnTouchdown(){powerups.push({x:c.width+30,y:rand(40,c.height-40),r:13,vx:2.0+t/3800,kind:'touchdown'});}
 function hit(a,b){
   const ar = a===player ? player.r * (touchdownFrames>0 ? 3 : 1) : a.r;
   return Math.hypot(a.x-b.x,a.y-b.y)<ar+b.r;
@@ -299,7 +299,7 @@ function step(){
   t++; spawnTimer++; bossTimer++;
   if(touchdownFrames>0)touchdownFrames--;
 
-  if(spawnTimer>Math.max(20,72-t/120)){
+  if(spawnTimer>Math.max(28,90-t/180)){
     spawnEnemy();
     if(Math.random()<.33)spawnFootball();
     if(Math.random()<.08)spawnTouchdown();
