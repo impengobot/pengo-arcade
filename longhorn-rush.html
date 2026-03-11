@@ -373,10 +373,46 @@ function step(dt=1){
 }
 
 function drawField(){
-  x.fillStyle=touchdownFrames>0?'#3a2a18':'#2f2f33';
+  const bg = touchdownFrames>0 ? '#2a5f2a' : '#2f7f3e';
+  x.fillStyle=bg;
   x.fillRect(0,0,c.width,c.height);
-  x.strokeStyle='#ffffff22';
-  for(let i=0;i<8;i++){x.beginPath();x.moveTo(0,i*70+((t*2)%70));x.lineTo(c.width,i*70+((t*2)%70));x.stroke();}
+
+  // moving football field pattern (right -> left)
+  const cycleW = 120;
+  const laneTop = 34;
+  const laneBottom = c.height - 34;
+  const hashInset = 16;
+  const hashLen = 10;
+  const fieldOffset = (t*2.4) % cycleW;
+
+  x.strokeStyle='rgba(255,255,255,0.85)';
+  x.lineWidth=2;
+
+  for(let sx = -cycleW; sx < c.width + cycleW; sx += cycleW){
+    const xLine = sx - fieldOffset;
+
+    // main vertical yard line
+    x.beginPath();
+    x.moveTo(xLine, laneTop);
+    x.lineTo(xLine, laneBottom);
+    x.stroke();
+
+    // 4 top hashes between this and next line
+    const next = xLine + cycleW;
+    for(let i=1;i<=4;i++){
+      const hx = xLine + (cycleW*i/5);
+      x.beginPath();
+      x.moveTo(hx, laneTop + hashInset);
+      x.lineTo(hx, laneTop + hashInset + hashLen);
+      x.stroke();
+
+      // mirrored bottom hashes
+      x.beginPath();
+      x.moveTo(hx, laneBottom - hashInset);
+      x.lineTo(hx, laneBottom - hashInset - hashLen);
+      x.stroke();
+    }
+  }
 }
 function drawPlayer(){
   const px=player.x, py=player.y;
