@@ -310,10 +310,11 @@ function gameOver(){
   maybeSetGlobalTop(finalScore);
 }
 
-function step(){
+function step(dt=1){
   if(over)return;
-  t++; spawnTimer++; bossTimer++;
-  if(touchdownFrames>0)touchdownFrames--;
+  const wasTd = touchdownFrames>0;
+  t+=dt; spawnTimer+=dt; bossTimer+=dt;
+  if(touchdownFrames>0)touchdownFrames-=dt;
 
   if(spawnTimer>Math.max(20,72-t/120)){
     spawnEnemy();
@@ -326,13 +327,13 @@ function step(){
     bossTimer=0;
   }
 
-  const speed=player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0);
+  const speed=(player.s + (boost?2.2:0) + (touchdownFrames>0?1.1:0)) * dt;
   if(keys.up)player.y-=speed; if(keys.down)player.y+=speed; if(keys.left)player.x-=speed; if(keys.right)player.x+=speed;
   player.x=Math.max(player.r,Math.min(c.width-player.r,player.x));
   player.y=Math.max(player.r,Math.min(c.height-player.r,player.y));
 
-  enemies.forEach(e=>{e.x-=e.vx;e.y+=e.vy;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
-  powerups.forEach(p=>p.x-=p.vx);
+  enemies.forEach(e=>{e.x-=e.vx*dt;e.y+=e.vy*dt;if(e.y<e.r||e.y>c.height-e.r)e.vy*=-1;});
+  powerups.forEach(p=>p.x-=p.vx*dt);
   enemies=enemies.filter(e=>e.x>-100);
   powerups=powerups.filter(p=>p.x>-60);
 
@@ -368,8 +369,8 @@ function step(){
     return true;
   });
 
-  if(touchdownFrames===1){stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
-  if(!over)score += 0.12 + t/60000;
+  if(wasTd && touchdownFrames<=0){touchdownFrames=0; stateEl.textContent='Tap + dodge the stampede'; sfxTouchdownOff(); setMusicMode('normal');}
+  if(!over)score += (0.12 + t/60000) * dt;
 }
 
 function drawField(){
@@ -443,7 +444,15 @@ function render(){
   }
 }
 
-(function loop(){step();render();requestAnimationFrame(loop);})();
+let lastTs=performance.now();
+(function loop(ts){
+  const dtRaw=(ts-lastTs)/(1000/60);
+  const dt=Math.max(0.6,Math.min(1.8,dtRaw||1));
+  lastTs=ts;
+  step(dt);
+  render();
+  requestAnimationFrame(loop);
+})(lastTs);
 </script>
 </body>
 </html>
